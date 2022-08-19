@@ -92,8 +92,12 @@ class OnyxCueList:
 
   # defaults
   value: int = 0  # for cuelists that can do a value
-  transitioning: bool = False
   active: bool = False
+  _transitioning_to: bool = None
+
+  @property
+  def transitioning(self) -> bool:
+    return self._transitioning_to is not None
 
 
 class OnyxClientProtocol(asyncio.Protocol):
@@ -313,16 +317,15 @@ class ObsidianOnyx:
 
     # update existing cuelist, match by number
     for existing in self.cueLists:
-      if existing.num in active_nums:
-        if not existing.active:
-          print(f'ACTIVE NOW: {existing.name}')
-          existing.active = True
-          dirty = True
-      else:
-        if existing.active:
-          print(f'DEACTIVATING NOW: {existing.name}')
-          dirty = True
-          existing.active = False
+      was_active = existing.active
+      is_active = existing.num in active_nums
+      if is_active != was_active:
+        dirty = True
+        existing.active = is_active
+      if existing._transitioning_to == is_active:
+        dirty = True
+        existing._transitioning_to = None
+
     if dirty:
       self._notify()
 
@@ -401,7 +404,7 @@ class ObsidianOnyx:
     #   orElse: () => OnyxCueList(parent: this,.num:.num),
     # )
     # also, attempt to flag the cue as transitioning
-    cueList.transitioning = True
+    cueList._transitioning_to = True
     self._notify()
     return await self.sendCmd(f'GQL {cueList.num}', True)
 
@@ -508,7 +511,7 @@ class ObsidianOnyx:
     # manually flag all as transitioning
     for cueList in self.cueLists:
       if (cueList.active):
-        cueList.transitioning = True
+        cueList._transitioning_to = False
     self._notify()
     return await self.sendCmd(f'RAQL', True)
 
@@ -519,7 +522,7 @@ class ObsidianOnyx:
     '''
     for cueList in self.cueLists:
       if cueList.active:
-        cueList.transitioning = True
+        cueList._transitioning_to = False
     self._notify()
     return await self.sendCmd(f'RAQLDF', True)
 
@@ -530,7 +533,7 @@ class ObsidianOnyx:
     '''
     for cueList in self.cueLists:
       if cueList.active:
-        cueList.transitioning = True
+        cueList._transitioning_to = False
     self._notify()
     return await self.sendCmd(f'RAQLO', True)
 
@@ -541,7 +544,7 @@ class ObsidianOnyx:
     '''
     for cueList in self.cueLists:
       if cueList.active:
-        cueList.transitioning = True
+        cueList._transitioning_to = False
     self._notify()
     return await self.sendCmd(f'RAQLODF', True)
 
@@ -550,7 +553,7 @@ class ObsidianOnyx:
     RQL
     [RQL #] -Release Cuelist where # is the Cuelist Number
     '''
-    cueList.transitioning = True
+    cueList._transitioning_to = False
     self._notify()
     return await self.sendCmd(f'RQL {cueList.num}', True)
 
@@ -617,7 +620,7 @@ class ObsidianOnyx:
     SetQLLevel
     [SetQLLevel #,#] -Set Cuelist level where first # is the Cuelist Number and second # is a level between 0 and 255r
     '''
-    cueList.transitioning = True
+    cueList._transitioning_to = True
     self._notify()
     return await self.sendCmd(f'SetQLLevel {cueList.num},{level}')
 

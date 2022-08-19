@@ -9,8 +9,9 @@ PORT = 2323
 
 
 def show_active(client: ObsidianOnyx):
+  ts('UPDATE RECEIVED')
   for item in client.cueLists:
-    if item.active:
+    if item.active or item.transitioning:
       print(item)
 
 
@@ -42,6 +43,11 @@ async def main():
   # NOTE: the key is an integer even though it's a dict, not a list
   selected = client.cueListMap[18] or None
   print(selected)
+
+  await asyncio.sleep(6)
+  await client.triggerCueList(selected)
+  await asyncio.sleep(6)
+  await client.releaseCueList(selected)
 
   # The client will remain active until the script closes
   # but make sure not to block the thread.
