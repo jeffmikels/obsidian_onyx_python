@@ -1,3 +1,6 @@
+# extra bits
+test*.py
+
 # Hide sublime text stuff
 *.sublime-project
 *.sublime-workspace

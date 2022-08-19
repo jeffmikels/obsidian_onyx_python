@@ -18,7 +18,7 @@ setup(
     description="Python wrapper for Obsidian Onyx Telnet API",
     long_description=README_FILE.read_text(encoding="utf-8"),
     long_description_content_type="text/markdown",
-    packages=find_packages(exclude=["test.*", "test"]),
+    packages=find_packages(exclude=["test*.*", "test"]),
     python_requires=">=3.6",
     include_package_data=True,
     zip_safe=False,
