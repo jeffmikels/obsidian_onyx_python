@@ -47,7 +47,9 @@ async def main():
   await asyncio.sleep(6)
   await client.triggerCueList(selected)
   await asyncio.sleep(6)
-  await client.releaseCueList(selected)
+
+  # use the release method on the cuelist itself
+  await selected.release()
 
   # The client will remain active until the script closes
   # but make sure not to block the thread.
