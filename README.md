@@ -26,7 +26,6 @@ See the example.py script in this folder or consider this even more simplified e
 
 ```python
 import asyncio
-import time
 from onyx import ObsidianOnyx
 
 HOST = '192.168.50.13'
@@ -110,8 +109,21 @@ All other methods are documented in the `onyx.py` file
 
 #### Properties
 
+-   parent: OnyxObsidian -> reference to the parent object of this cue list
 -   num: str -> the cue list number kept as a string, i.e. "00018"
 -   name: str -> the cue list name as stored in Onyx
 -   value: int -> some cue lists have a value associated with them
 -   active: bool -> is the cue list currently active
 -   transitioning: bool -> computed property, true whenever a cuelist is transitioning
+
+#### Methods
+
+Although cue lists can be triggered and controlled directly from the ObsidianOnyx class methods, sometimes it's easier to call them from the cue list object itself. As a result, each cue list retains a reference to its 'parent' which allows the following methods to exist on the cue list objects.
+
+-   trigger() -> triggers the cuelist
+-   triggerCue(nuber) -> triggers an individual cue in the cuelist according to `number`
+-   pause() -> pause the cuelist (if pausing makes sense for that cue list)
+-   release() -> releases the cuelist entirely
+-   setLevel(value) -> sets the level of a cuelist to `value` (between 0 and 255)
+-   reloadActive() -> manually update the active status of this cuelist with a new request to Onyx.
+-   reloadName() -> manually update the name of this cuelist with a new request to Onyx.

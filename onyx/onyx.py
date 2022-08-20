@@ -3,6 +3,8 @@ import re
 from time import time
 
 from typing import Callable
+from __future__ import annotations
+
 from dataclasses import dataclass
 
 from .exceptions import ObsidianOnyxError
@@ -87,6 +89,8 @@ class OnyxCueList:
   00004 - LED Tape
   00005 - Bulbs
   ```"""
+  parent: ObsidianOnyx
+
   num: str
   name: str
 
@@ -98,6 +102,28 @@ class OnyxCueList:
   @property
   def transitioning(self) -> bool:
     return self._transitioning_to is not None
+
+  async def trigger(self):
+    return await self.parent.triggerCueList(self)
+
+  async def triggerCue(self, num: int):
+    return await self.parent.triggerCue(self, num)
+
+  async def pause(self):
+    return await self.parent.pauseCueList(self)
+
+  async def release(self):
+    return await self.parent.releaseCueList(self)
+
+  async def setLevel(self, level: int):
+    '''level must be between 0 and 255'''
+    return await self.parent.setCueListLevel(self, level)
+
+  async def reloadActive(self):
+    self.active = await self.parent.isCueListActive(self)
+
+  async def reloadName(self):
+    self.name = await self.parent.getCueListName(self)
 
 
 class _OnyxClientProtocol(asyncio.Protocol):
@@ -288,7 +314,7 @@ class ObsidianOnyx:
     self.cueLists.clear()
     self.cueListMap.clear()
     for item in m.data:
-      cl = parse_cuelist(item)
+      cl = parse_cuelist(self, item)
       if cl is not None:
         self.cueListMap[int(cl.num)] = cl
         self.cueLists.append(cl)
@@ -299,7 +325,7 @@ class ObsidianOnyx:
     m = await self.getActiveCueLists()
     active_nums = []
     for item in m.data:
-      cl = parse_cuelist(item)
+      cl = parse_cuelist(self, item)
       if cl is not None:
         active_nums.append(cl.num)
 
@@ -343,7 +369,7 @@ class ObsidianOnyx:
     [ActName #] -Will return the name of Maxxyz Manager Action name
     '''
     result = await self.sendCmd(f'ActName {actionNumber}')
-    return result.dataLines[0]
+    return result.data[0]
 
   async def disconnect(self):
     '''
@@ -379,22 +405,7 @@ class ObsidianOnyx:
     [CmdName #] -Will return the name of Maxxyz Manager Command name #
     '''
     result = await self.sendCmd(f'CmdName {commandNumber}')
-    return result.dataLines[0]
-
-  async def triggerCueList(self, cueList):
-    '''
-    GQL
-    [GQL #] -Go Cuelist where # is the Cuelist Number
-    '''
-    # from when we called this with the.num only
-    # cue = cueLists.firstWhere(
-    #   (c) => c.num ==.num,
-    #   orElse: () => OnyxCueList(parent: this,.num:.num),
-    # )
-    # also, attempt to flag the cue as transitioning
-    cueList._transitioning_to = True
-    self._notify()
-    return await self.sendCmd(f'GQL {cueList.num}', True)
+    return result.data[0]
 
   async def triggerSchedule(self, scheduleNumber):
     '''
@@ -403,6 +414,15 @@ class ObsidianOnyx:
     To return to calendar rules use the SchUseCalendar command
     '''
     return await self.sendCmd(f'GSC {scheduleNumber}', True)
+
+  async def triggerCueList(self, cueList):
+    '''
+    GQL
+    [GQL #] -Go Cuelist where # is the Cuelist Number
+    '''
+    cueList._transitioning_to = True
+    self._notify()
+    return await self.sendCmd(f'GQL {cueList.num}', True)
 
   async def triggerCue(self, cueList: OnyxCueList, cueNumber: int):
     '''
@@ -425,7 +445,7 @@ class ObsidianOnyx:
     [IsMxRun] -Will return the state of Maxxyz (Yes or No)
     '''
     result = await self.sendCmd(f'IsMxRun')
-    return (result.dataLines.first.toLowerCase() == 'yes')
+    return (result.data[0].toLowerCase() == 'yes')
 
   async def isCueListActive(self, cueList: OnyxCueList):
     '''
@@ -433,7 +453,7 @@ class ObsidianOnyx:
     [IsQLActive #] -Will return the state of Qlist # (Yes or No)
     '''
     result = await self.sendCmd(f'IsQLActive {cueList.num}')
-    return (result.dataLines.first.toLowerCase() == 'yes')
+    return (result.data[0].toLowerCase() == 'yes')
 
   async def isSchRun(self):
     '''
@@ -441,7 +461,7 @@ class ObsidianOnyx:
     [IsSchRun] -Will return the Scheduler state (yes or no)
     '''
     result = await self.sendCmd(f'IsSchRun')
-    return (result.dataLines.first.toLowerCase() == 'yes')
+    return (result.data[0].toLowerCase() == 'yes')
 
   async def getRecentLog(self, numLines):
     '''
@@ -473,16 +493,16 @@ class ObsidianOnyx:
     '''
     return await self.sendCmd(f'QLList')
 
-  '''
-  QLName
-  [QLName #] -Will return the name of Maxxyz Cuelist #
-  '''
-  # / WARNING: DOES NOT WORK with some versions of Onyx
-  # / command will probably timeout
-
   async def getCueListName(self, cueListNumber):
+    '''
+    QLName
+    [QLName #] -Will return the name of Maxxyz Cuelist #
+
+    WARNING: DOES NOT WORK with some versions of Onyx
+    command will probably timeout
+    '''
     result = await self.sendCmd(f'QLName {cueListNumber}')
-    return result.dataLines.first or ''
+    return result.data[0] or ''
 
   async def releaseAllOverrides(self):
     '''
@@ -558,7 +578,7 @@ class ObsidianOnyx:
     [SchName #] -Will return the name of Maxxyz Manager Schedule name #
     '''
     result = await self.sendCmd(f'SchName {scheduleNumber}')
-    return result.dataLines.first or ''
+    return result.data[0] or ''
 
   async def setSchedulerToUseCalendar(self):
     '''
@@ -643,9 +663,9 @@ class ObsidianOnyx:
     return await self.sendCmd(f'TimePresetList')
 
 
-def parse_cuelist(s: str) -> OnyxCueList:
+def parse_cuelist(parent: ObsidianOnyx, s: str) -> OnyxCueList:
   match = cuelist_info_search.match(s)
   if match:
     num, name = match.groups()
-    return OnyxCueList(num, name)
+    return OnyxCueList(parent, num, name)
   return None
