@@ -100,9 +100,9 @@ class OnyxCueList:
     return self._transitioning_to is not None
 
 
-class OnyxClientProtocol(asyncio.Protocol):
-  def __init__(self, first_message, on_close: Callable, on_message: Callable[[OnyxMessage], None] = None):
-    self.message = first_message
+class _OnyxClientProtocol(asyncio.Protocol):
+  def __init__(self, connect_message, on_close: Callable, on_message: Callable[[OnyxMessage], None] = None):
+    self.message = connect_message
     self.on_close = on_close
     self.on_message = on_message
     self.accumulator = ''
@@ -192,29 +192,20 @@ class ObsidianOnyx:
   cueListMap: dict[int, OnyxCueList]
   transport: asyncio.Transport
   completer: asyncio.Future = None
-  connected: asyncio.Future = None
+  connected: bool = False
   first_message: OnyxMessage = None
-  # last_completer: float
+  on_update: Callable[[], None] = None
+  on_message: Callable[[OnyxMessage], None] = None
 
-  @property
-  def deviceInfo(self):
-    return self._deviceInfo
-
-  @property
-  def settings(self):
-    return self._settings
-
-  def __init__(self, host, port, on_update: Callable = None, on_message: Callable[[OnyxMessage], None] = None):
+  def __init__(self, host, port, on_update: Callable[[], None] = None, on_message: Callable[[OnyxMessage], None] = None):
     self.host = host
     self.port = port
-    self._deviceInfo = None
-    self._settings = None
+    self._boost_time = 0
     self.on_message = on_message
     self.on_update = on_update
     self.cueLists = []
     self.cueListMap = {}
     self.connected = False
-    self._boost_time = 0
 
   def _internal_on_message(self, msg: OnyxMessage):
     # print(f'received message: {msg}')
@@ -238,7 +229,7 @@ class ObsidianOnyx:
     loop = asyncio.get_running_loop()
     self.completer = loop.create_future()
     transport, protocol = await loop.create_connection(
-        lambda: OnyxClientProtocol(
+        lambda: _OnyxClientProtocol(
             '',
             self._on_close,
             self._internal_on_message
@@ -247,7 +238,7 @@ class ObsidianOnyx:
     self.connected = True
     await self.loadAll()
     print('starting timer')
-    asyncio.ensure_future(self.loop())
+    asyncio.ensure_future(self._loop())
 
   def _notify(self):
     self.on_update is None or self.on_update(self)
@@ -280,16 +271,13 @@ class ObsidianOnyx:
   #
   # These functions handle the internal state of this class
   #
-  async def loop(self):
+  async def _loop(self):
     if self.connected:
       next_tick = 0.2 if self._boost_time > 0 else 1
       self._boost_time -= next_tick
-      await self.update()
+      await self.loadActive()
       await asyncio.sleep(next_tick)
-      await self.loop()
-
-  async def update(self):
-    await self.loadActive()
+      await self._loop()
 
   async def loadAll(self):
     await self.loadAvailable()
